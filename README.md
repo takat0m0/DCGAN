@@ -1,2 +1,2 @@
 # DCGAN
-under constraction....
+DCGAN with tensorflow

@@ -5,14 +5,14 @@ import sys
 import numpy as np
 import tensorflow as tf
 
-from util import get_weights, get_biases, get_dim
+from util import get_weights, get_biases, get_dim, lrelu
 from batch_normalize import batch_norm
 
 def conv_layer(inputs, out_num, filter_width, filter_hight, stride, l_id):
     # ** NOTICE: weight shape is [hight, width, in_chanel, out_chanel] **
     weights = get_weights(l_id,
                           [filter_hight, filter_width, inputs.get_shape()[-1], out_num],
-                          0.1)
+                          0.02)
     
     biases = get_biases(l_id, [out_num], 0.0)
     
@@ -38,6 +38,11 @@ class Discriminator(object):
         return ret
     
     def set_model(self, figs, is_training):
+
+        u'''
+        return only logits. not sigmoid(logits).
+        '''
+        
         h = figs
         
         # convolution
@@ -47,19 +52,24 @@ class Discriminator(object):
                                     out_num = out_chan,
                                     filter_width = 5, filter_hight = 5,
                                     stride = 2, l_id = i)
-                bn_conved = batch_norm(conved, i, is_training)
-                h = tf.nn.relu(conved)
+                if i == 0:
+                    #h = tf.nn.relu(conved)
+                    h = lrelu(conved)
+                else:
+                    bn_conved = batch_norm(conved, i, is_training)
+                    #h = tf.nn.relu(bn_conved)
+                    h = lrelu(bn_conved)
 
         # full connect
         dim = get_dim(h)
         h = tf.reshape(h, [-1, dim])
         
         with tf.variable_scope(self.name_scope_fc):
-            weights = get_weights('fc', [dim, 1], 0.1)
+            weights = get_weights('fc', [dim, 1], 0.02)
             biases  = get_biases('fc', [1], 0.0)
             h = tf.matmul(h, weights) + biases
-            
-        return tf.nn.sigmoid(h), h
+        
+        return h
     
 if __name__ == u'__main__':
     g = Discriminator([3, 64, 128, 256, 512])

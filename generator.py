@@ -5,20 +5,19 @@ import sys
 import numpy as np
 import tensorflow as tf
 
-from util import get_weights, get_biases
+from util import get_weights, get_biases, lrelu
 from batch_normalize import batch_norm
 
 def deconv_layer(inputs, out_shape, filter_width, filter_hight, stride, l_id):
     # ** NOTICE: weight shape is [hight, width, out_chanel, in_chanel] **
     weights = get_weights(l_id,
                           [filter_hight, filter_width, out_shape[-1], inputs.get_shape()[-1]],
-                          0.1)
+                          0.02)
     
     biases = get_biases(l_id, [out_shape[-1]], 0.0)
     
     deconved = tf.nn.conv2d_transpose(inputs, weights, output_shape = out_shape,
                                       strides=[1, stride,  stride,  1])
-    
     return tf.nn.bias_add(deconved, biases)
 
 class Generator(object):
@@ -38,20 +37,20 @@ class Generator(object):
                 ret.append(var)
         return ret
     
-    def set_model(self, z, is_training):
-        #self.z = tf.placeholder(tf.float32, [None, self.z_dim])
+    def set_model(self, z, batch_size, is_training):
 
         # reshape z
         with tf.variable_scope(self.name_scope_reshape):
             w_r = get_weights('_r',
                               [self.z_dim, self.in_dim * self.in_dim * self.layer_chanels[0]],
-                              0.1)
+                              0.02)
             b_r = get_biases('_r',
                              [self.in_dim * self.in_dim * self.layer_chanels[0]],
                              0.0)
             h = tf.matmul(z, w_r) + b_r
             h = batch_norm(h, 'reshape', is_training)
             h = tf.nn.relu(h)
+            #h = lrelu(h)
             
         h = tf.reshape(h, [-1, self.in_dim, self.in_dim, self.layer_chanels[0]])
 
@@ -59,14 +58,15 @@ class Generator(object):
         with tf.variable_scope(self.name_scope_deconv):
             for i, (in_chan, out_chan) in enumerate(zip(self.layer_chanels, self.layer_chanels[1:])):
                 deconved = deconv_layer(inputs = h,
-                                        out_shape = [100, self.in_dim * 2 ** (i + 1), self.in_dim * 2 **(i + 1), out_chan],
+                                        out_shape = [batch_size, self.in_dim * 2 ** (i + 1), self.in_dim * 2 **(i + 1), out_chan],
                                         filter_width = 5, filter_hight = 5,
                                         stride = 2, l_id = i)
                 bn_deconved = batch_norm(deconved, i, is_training)
                 h = tf.nn.relu(bn_deconved)
+                #h = lrelu(bn_deconved)
 
-        #return tf.nn.tanh(deconved)
-        return tf.nn.sigmoid(deconved)
+        return tf.nn.tanh(deconved)
+        
     
 if __name__ == u'__main__':
     g = Generator(100, [1024, 512, 256, 128, 3])
